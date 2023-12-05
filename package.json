@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-sample-plugin",
+	"name": "obsidian-time-tracker-template-builder-plugin",
 	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"description": "Time tracker template builder plugin for obsidian (https://github.com/ezhov-da/obsidian-time-tracker-template-builder-plugin)",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
