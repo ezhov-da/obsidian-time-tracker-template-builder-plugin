@@ -1,11 +1,24 @@
-import {App, Editor, MarkdownFileInfo, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting} from 'obsidian';
+import {
+	App,
+	Editor,
+	FuzzySuggestModal,
+	MarkdownFileInfo,
+	MarkdownView,
+	Modal,
+	Notice,
+	Plugin,
+	PluginSettingTab,
+	Setting,
+} from 'obsidian';
 
 interface MyPluginSettings {
 	regexp: string;
+	presetTasks: string;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-	regexp: '`tt .*`'
+	regexp: '`tt .*`',
+	presetTasks: ''
 }
 
 interface TimeTrackerTemplateInfo {
@@ -25,11 +38,9 @@ export default class MyPlugin extends Plugin {
 
 		const calculateMinutes = function (text: string) {
 			const infos = plugin.getTimeTrackerTemplateInfo(text)
-			const sum = infos.reduce((accumulator, object) => {
+			return infos.reduce((accumulator, object) => {
 				return accumulator + object.time;
 			}, 0)
-
-			return sum
 		}
 
 		const setMinutesTuStatusBar = function (text: string) {
@@ -44,7 +55,7 @@ export default class MyPlugin extends Plugin {
 				const info = this.getTimeTrackerTemplateInfo(value);
 				const text = this.getTimeTrackerTemplate(info);
 
-				new SampleModal(this.app, text).open();
+				new TemplateModal(this.app, text).open();
 			}
 		})
 
@@ -63,6 +74,14 @@ export default class MyPlugin extends Plugin {
 				setMinutesTuStatusBar(text)
 			}
 		}
+
+		this.addCommand({
+			id: 'open-preset-tasks-modal-command',
+			name: 'Open preset tasks for time tracker template',
+			editorCallback: (editor: Editor, view: MarkdownView) => {
+				new PresetTasksModal(this.app, this.getPresetTasks()).open();
+			}
+		});
 
 		this.registerEvent(
 			this.app.workspace.on('file-open', onFileOpenEvent)
@@ -86,6 +105,24 @@ export default class MyPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	getPresetTasks(): Array<PresetTask> {
+		const tasks = this.settings.presetTasks.split("\n").map(v => {
+			const array = v.split("___")
+			if (array.length == 2) {
+				const presetTask: PresetTask = {
+					id: array[0],
+					name: array[1],
+				}
+
+				return presetTask
+			} else {
+				return undefined
+			}
+		})
+
+		return tasks.filter((item): item is PresetTask => !!item) ?? []
 	}
 
 	getTimeTrackerTemplateInfo(inputText: string): Array<TimeTrackerTemplateInfo> {
@@ -121,7 +158,7 @@ export default class MyPlugin extends Plugin {
 	}
 }
 
-class SampleModal extends Modal {
+class TemplateModal extends Modal {
 	private readonly text: string;
 
 	constructor(app: App, text: string) {
@@ -153,6 +190,36 @@ class SampleModal extends Modal {
 	}
 }
 
+interface PresetTask {
+	id: string,
+	name: string
+}
+
+export class PresetTasksModal extends FuzzySuggestModal<PresetTask> {
+	private readonly tasks: Array<PresetTask>
+
+	constructor(app: App, tasks: Array<PresetTask>) {
+		super(app);
+		this.tasks = tasks;
+	}
+
+	getItems(): PresetTask[] {
+		return this.tasks;
+	}
+
+	getItemText(task: PresetTask): string {
+		return task.name;
+	}
+
+	onChooseItem(task: PresetTask, evt: MouseEvent | KeyboardEvent) {
+		const editor = this.app.workspace.activeEditor?.editor;
+		new Notice(`Selected ${task.name}`);
+		if (editor) {
+			editor.replaceSelection(task.id);
+		}
+	}
+}
+
 class SampleSettingTab extends PluginSettingTab {
 	plugin: MyPlugin;
 
@@ -174,6 +241,16 @@ class SampleSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.regexp)
 				.onChange(async (value) => {
 					this.plugin.settings.regexp = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Preset tasks for quick selection')
+			.setDesc('Format: Task ID___Title')
+			.addTextArea(text => text
+				.setValue(this.plugin.settings.presetTasks)
+				.onChange(async (value) => {
+					this.plugin.settings.presetTasks = value;
 					await this.plugin.saveSettings();
 				}));
 	}
