@@ -14,11 +14,13 @@ import {
 interface MyPluginSettings {
 	regexp: string;
 	presetTasks: string;
+	maxTimeInMinutes: number;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
 	regexp: '`tt .*`',
-	presetTasks: ''
+	presetTasks: '',
+	maxTimeInMinutes: 480
 }
 
 interface TimeTrackerTemplateInfo {
@@ -45,8 +47,17 @@ export default class MyPlugin extends Plugin {
 
 		const setMinutesTuStatusBar = function (text: string) {
 			const sum = calculateMinutes(text)
+			let max = plugin.settings.maxTimeInMinutes
+			let dif = max - sum
 
-			statusBarItemEl.setText(`Minutes on file: '${sum}'`);
+			let resultText: string = ''
+			if (sum === max) {
+				resultText = `Minutes on file: '${sum}'`
+			} else {
+				resultText = `Minutes on file: '${sum}'. M: '${max}'. D: '${dif}'`
+			}
+
+			statusBarItemEl.setText(resultText);
 		}
 
 		statusBarItemEl.onClickEvent((ev) => {
@@ -139,9 +150,14 @@ export default class MyPlugin extends Plugin {
 			textTemp = textTemp.substring(0, textTemp.length - 1)
 			let text = textTemp
 
+			let minutesAsInt = parseInt(minutes)
+			if (isNaN(minutesAsInt)) {
+				minutesAsInt = 0
+			}
+
 			const timeTrackerTemplateInfo: TimeTrackerTemplateInfo = {
 				id: jiraId,
-				time: parseInt(minutes),
+				time: minutesAsInt,
 				text: text,
 			}
 
@@ -170,9 +186,19 @@ class TemplateModal extends Modal {
 		const {contentEl} = this;
 
 		const div = contentEl.createEl("div")
-		div.createEl("pre", {text: this.text})
+		div.style.height = "100%"
 
-		div.createEl("button", {text: 'Copy to clipboard',}).onClickEvent(() => {
+		const textareaDiv = div.createEl("div")
+		textareaDiv.style.width = "100%"
+		textareaDiv.style.height = "25vh"
+
+		const textarea = textareaDiv.createEl("textarea", {text: this.text})
+		textarea.style.width = "100%"
+		textarea.style.height = "100%"
+		textarea.style.fontFamily = "Courier New"
+
+		const buttonDiv = div.createEl("div")
+		buttonDiv.createEl("button", {text: 'Copy to clipboard',}).onClickEvent(() => {
 			this.copyPathToClipboard(this.text)
 		})
 	}
@@ -251,6 +277,16 @@ class SampleSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.presetTasks)
 				.onChange(async (value) => {
 					this.plugin.settings.presetTasks = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Maximum time in minutes')
+			.setDesc('Used to calculate the time remaining for depositing')
+			.addText(text => text
+				.setValue(this.plugin.settings.maxTimeInMinutes.toString())
+				.onChange(async (value) => {
+					this.plugin.settings.maxTimeInMinutes = parseInt(value);
 					await this.plugin.saveSettings();
 				}));
 	}
